@@ -8,7 +8,7 @@ from datetime import datetime
 
   
 st.set_page_config( 
-    page_title='COMP 3601 Assignment 1', 
+    page_title='NYC Yellow Taxi Data Pipeline & Visualization Dashboard.', 
     page_icon='taxi', 
     layout='wide' 
 ) 
@@ -403,5 +403,5 @@ with t3:# ======================= Graphs Tab =======================
                 "#### More Trips with Shorter Distances on evenings."
                 )
             st.markdown(
-                "Considering the previous graph that shows the higher average fares on mornings, this graph indicates that taxi generate vastly more money around the evening times. The fare averages are lower but the amount of trips are much higher. This graph may also indicate that people tend to use a different mode of transportation on mornings."
+                "Considering the previous graph that shows the higher average fares on mornings, this graph indicates that taxis generate vastly more revenue around the evening times. The fare averages are lower but the amount of trips are much higher. This graph may also indicate that people tend to use a different mode of transportation on mornings."
             )
