@@ -2,9 +2,11 @@ import streamlit as st
 import altair as alt
 import pandas as pl
 import duckdb
+from urllib import request
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
+import io
 
   
 st.set_page_config( 
@@ -18,8 +20,72 @@ st.title('NYC Yellow Taxi Data Pipeline & Visualization Dashboard.')
 # Big dataframe queries into functions with st.cache_data
 @st.cache_data 
 def load_data(): 
-    df = pl.read_parquet('.\\data\\raw\\yellow_tripdata_2024-01.parquet') 
-    lut = pl.read_csv('.\\data\\raw\\taxi_zone_lookup.csv')
+
+    parq_url = 'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet'
+    lut_url = 'https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv'
+
+    with request.urlopen(parq_url) as parq_file:
+        parquet_bytes = parq_file.read()
+
+    df = pl.read_parquet(io.BytesIO(parquet_bytes))
+    
+    with request.urlopen(lut_url) as lut_file:
+        lut_bytes = lut_file.read()
+
+    lut = pl.read_csv(io.BytesIO(lut_bytes))
+
+# Ensure datetime dtype
+    df['tpep_pickup_datetime'] = pl.to_datetime(df['tpep_pickup_datetime'])
+    df['tpep_dropoff_datetime'] = pl.to_datetime(df['tpep_dropoff_datetime'])
+
+    # Remove nulls
+    df = df[
+        df['tpep_pickup_datetime'].notnull() &
+        df['tpep_dropoff_datetime'].notnull() &
+        df['PULocationID'].notnull() &
+        df['DOLocationID'].notnull() &
+        df['passenger_count'].notnull() &
+        df['trip_distance'].notnull() &
+        df['fare_amount'].notnull() &
+        df['tip_amount'].notnull() &
+        df['total_amount'].notnull() &
+        df['payment_type'].notnull()
+    ].copy()
+
+    # Removing invalid fares
+    df = df[
+        (df['trip_distance'] > 0.0) &
+        (df['total_amount'] > 0.0) &
+        (df['total_amount'] <= 500)
+    ]
+
+    # Removing invalid dates
+    df = df[
+        (df['tpep_pickup_datetime'] < df['tpep_dropoff_datetime']) &
+        (df['tpep_pickup_datetime'] >= datetime(2024, 1, 1)) &
+        (df['tpep_pickup_datetime'] <= datetime(2024, 1, 31))
+    ]
+
+    # trip_duration_minutes added
+    df['trip_duration_minutes'] = (
+    (df['tpep_dropoff_datetime'] - df['tpep_pickup_datetime'])
+    .dt.total_seconds() / 60
+    )
+    # trip_speed_mph added
+    hours = df['trip_duration_minutes'] / 60.0
+
+    df['trip_speed_mph'] = 0
+    mask = hours > 0
+    df.loc[mask, 'trip_speed_mph'] = df.loc[mask, 'trip_distance'] / hours[mask]
+
+
+    # pickup_hour added
+    df['pickup_hour'] = df['tpep_pickup_datetime'].dt.hour
+
+    # pickup_day_of_week added
+    df['pickup_day_of_week'] = df['tpep_pickup_datetime'].dt.strftime("%A")
+
+
     return df, lut
 
 @st.cache_data
