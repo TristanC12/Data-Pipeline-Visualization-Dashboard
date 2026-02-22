@@ -97,9 +97,9 @@ def load_filtered(df, ptype, value, bound, startdate, enddate, starthour, endhou
             trimmed_df = df.sample(n=value, random_state=42)
          
         filtered_df = trimmed_df[
-            (((df['tpep_pickup_datetime'] >= startdate) & (df['tpep_dropoff_datetime'] <= enddate)) &
-            ((df['pickup_hour'] >= starthour) & (df['pickup_hour'] <= endhour)) &
-            ((df['payment_type']).all()))
+            (((trimmed_df['tpep_pickup_datetime'] >= startdate) & (trimmed_df['tpep_dropoff_datetime'] <= enddate)) &
+            ((trimmed_df['pickup_hour'] >= starthour) & (trimmed_df['pickup_hour'] <= endhour)) &
+            ((trimmed_df['payment_type']).all()))
         ]
     else:
         if(value == bound):
@@ -107,9 +107,9 @@ def load_filtered(df, ptype, value, bound, startdate, enddate, starthour, endhou
         else:
             trimmed_df = df.sample(n=value, random_state=42) 
         filtered_df = trimmed_df[
-            (((df['tpep_pickup_datetime'] >= startdate) & (df['tpep_dropoff_datetime'] <= enddate)) &
-            ((df['pickup_hour'] >= starthour) & (df['pickup_hour'] <= endhour)) &
-            ((df['payment_type']) == ptype))
+            (((trimmed_df['tpep_pickup_datetime'] >= startdate) & (trimmed_df['tpep_dropoff_datetime'] <= enddate)) &
+            ((trimmed_df['pickup_hour'] >= starthour) & (trimmed_df['pickup_hour'] <= endhour)) &
+            ((trimmed_df['payment_type']) == ptype))
         ]
     
     return filtered_df
