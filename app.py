@@ -11,7 +11,6 @@ import io
   
 st.set_page_config( 
     page_title='NYC Yellow Taxi Data Pipeline & Visualization Dashboard.', 
-    page_icon='taxi', 
     layout='wide' 
 ) 
 
@@ -319,7 +318,6 @@ with t4:# ======================== Filters Tab ========================
 
 with t3:# ======================= Graphs Tab =======================
 
-        
         con = duckdb.connect()  # Used DuckDB for speed
 
         # ======================== Bar chart ========================
@@ -328,7 +326,6 @@ with t3:# ======================= Graphs Tab =======================
         # Query reused from the notebook
 
         print(result)
-
 
         bar_chart = alt.Chart(result).mark_bar().encode(
             x = alt.X("Zone", sort = None),
