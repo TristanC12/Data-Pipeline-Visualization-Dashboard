@@ -15,11 +15,104 @@ st.set_page_config(
 
 st.title('NYC Yellow Taxi Data Pipeline & Visualization Dashboard.') 
 
+# Big dataframe queries into functions with st.cache_data
 @st.cache_data 
 def load_data(): 
     df = pl.read_parquet('.\\data\\raw\\yellow_tripdata_2024-01.parquet') 
     lut = pl.read_csv('.\\data\\raw\\taxi_zone_lookup.csv')
     return df, lut
+
+@st.cache_data
+def load_filtered(df, ptype, value, bound, startdate, enddate, starthour, endhour):
+    if(ptype == "All"):
+
+        if(value == bound):
+            trimmed_df = df
+        else:
+            trimmed_df = df.sample(n=value, random_state=42)
+         
+        filtered_df = trimmed_df[
+            (((df['tpep_pickup_datetime'] >= startdate) & (df['tpep_dropoff_datetime'] <= enddate)) &
+            ((df['pickup_hour'] >= starthour) & (df['pickup_hour'] <= endhour)) &
+            ((df['payment_type']).all()))
+        ]
+    else:
+        if(value == bound):
+            trimmed_df = df
+        else:
+            trimmed_df = df.sample(n=value, random_state=42) 
+        filtered_df = trimmed_df[
+            (((df['tpep_pickup_datetime'] >= startdate) & (df['tpep_dropoff_datetime'] <= enddate)) &
+            ((df['pickup_hour'] >= starthour) & (df['pickup_hour'] <= endhour)) &
+            ((df['payment_type']) == ptype))
+        ]
+    
+    return filtered_df
+
+@st.cache_data
+def load_g1_data(filtered_df):
+        result = con.execute('''
+        SELECT PULocationID, l.Zone,
+        COUNT(*) AS total_trips 
+        FROM filtered_df
+        JOIN lut l
+        ON PULocationID = l.LocationID
+        GROUP BY PULocationID, l.Zone
+        ORDER BY total_trips DESC
+        LIMIT 10;
+                            
+        ''').fetchdf()
+
+        return result
+
+@st.cache_data
+def load_g2_data(filtered_df):
+        result = con.execute('''
+        SELECT pickup_hour,
+        AVG(fare_amount) AS average_fare
+        FROM filtered_df
+        GROUP BY pickup_hour
+        ORDER BY pickup_hour;
+        ''').fetchdf()
+
+        return result
+
+@st.cache_data
+def load_g3_data(filtered_df):
+        result = con.execute('''
+        SELECT 
+        trip_distance,
+        trip_duration_minutes
+        FROM filtered_df
+        WHERE trip_distance < 500;
+        ''').fetchdf()
+
+        return result
+
+@st.cache_data
+def load_g4_data(filtered_df):
+        result = con.execute('''
+        SELECT 
+        payment_type,
+        fare_amount
+        FROM filtered_df;
+        ''').fetchdf()
+
+        return result
+
+@st.cache_data
+def load_g5_data(filtered_df):
+        result = con.execute('''
+        SELECT 
+        pickup_hour,
+        DATE_PART('dow', tpep_pickup_datetime) AS day_of_week,
+        COUNT(*) as trip_count,     
+        FROM filtered_df
+        GROUP BY pickup_hour, day_of_week
+        ORDER BY pickup_Hour, day_of_week;
+        ''').fetchdf()
+
+        return result
   
 df, lut = load_data() 
 
@@ -155,29 +248,8 @@ with t4:# ======================== Filters Tab ========================
 
     startdate = pl.to_datetime(startdate)
     enddate = pl.to_datetime(enddate)
- 
-    if(ptype == "All"):
 
-        if(value == bound):
-            trimmed_df = df
-        else:
-            trimmed_df = df.sample(n=value, random_state=42)
-         
-        filtered_df = trimmed_df[
-            (((df['tpep_pickup_datetime'] >= startdate) & (df['tpep_dropoff_datetime'] <= enddate)) &
-            ((df['pickup_hour'] >= starthour) & (df['pickup_hour'] <= endhour)) &
-            ((df['payment_type']).all()))
-        ]
-    else:
-        if(value == bound):
-            trimmed_df = df
-        else:
-            trimmed_df = df.sample(n=value, random_state=42) 
-        filtered_df = trimmed_df[
-            (((df['tpep_pickup_datetime'] >= startdate) & (df['tpep_dropoff_datetime'] <= enddate)) &
-            ((df['pickup_hour'] >= starthour) & (df['pickup_hour'] <= endhour)) &
-            ((df['payment_type']) == ptype))
-        ]
+    filtered_df = load_filtered(df, ptype, value, bound, startdate, enddate, starthour, endhour)
 
 with t3:# ======================= Graphs Tab =======================
 
@@ -185,17 +257,7 @@ with t3:# ======================= Graphs Tab =======================
         con = duckdb.connect()  # Used DuckDB for speed
 
         # ======================== Bar chart ========================
-        result = con.execute('''
-        SELECT PULocationID, l.Zone,
-        COUNT(*) AS total_trips 
-        FROM filtered_df
-        JOIN lut l
-        ON PULocationID = l.LocationID
-        GROUP BY PULocationID, l.Zone
-        ORDER BY total_trips DESC
-        LIMIT 10;
-                            
-        ''').fetchdf()
+        result = load_g1_data(filtered_df)
 
         # Query reused from the notebook
 
@@ -220,33 +282,19 @@ with t3:# ======================= Graphs Tab =======================
 
         # ======================== Line Chart ==============================
 
-        result = con.execute('''
-        SELECT pickup_hour,
-        AVG(fare_amount) AS average_fare
-        FROM filtered_df
-        GROUP BY pickup_hour
-        ORDER BY pickup_hour;
-        ''').fetchdf()
-
+        result = load_g2_data(filtered_df)
         # Query reused from the notebook
 
         line_chart = alt.Chart(result).mark_line().encode(
             x = alt.X("pickup_hour", title="Pickup Hour", sort=None),
             y = alt.X("average_fare", title = "Average Fare")
         ).properties(
-            height = 600,
-            
+            height = 600
         )
 
         # ======================== Histogram ========================
 
-        result = con.execute('''
-        SELECT 
-        trip_distance,
-        trip_duration_minutes
-        FROM filtered_df
-        WHERE trip_distance < 500;
-        ''').fetchdf()
+        result = load_g3_data(filtered_df)
 
         # Used a second attribute to avoid some issues with the Series type. Just need trip_distance
 
@@ -258,25 +306,18 @@ with t3:# ======================= Graphs Tab =======================
             tooltip = ["trip_distance","count()"]
             
         ).properties(
-            height = 600,
-
+            height = 600
         )
 
         # ========================  Second Bar Chart ========================
 
-        result = con.execute('''
-        SELECT 
-        payment_type,
-        fare_amount
-        FROM filtered_df;
-        ''').fetchdf()
-
+        result = load_g4_data(filtered_df)
 
         bar_chart2 = alt.Chart(result).mark_bar(size = 40).encode(
             x = alt.X("payment_type:Q", title="Payment Types" ,sort = None, axis = alt.Axis(values=[1,2,3,4])),
             y = alt.X("count()", title = "Total Payments")
         ).properties(
-            height = 600,
+            height = 600
         )
         
         text2 = bar_chart2.mark_text(       # Added number above bars for clarity here as well
@@ -290,15 +331,7 @@ with t3:# ======================= Graphs Tab =======================
 
         # ========================  Heatmap ========================
 
-        result = con.execute('''
-        SELECT 
-        pickup_hour,
-        DATE_PART('dow', tpep_pickup_datetime) AS day_of_week,
-        COUNT(*) as trip_count,     
-        FROM filtered_df
-        GROUP BY pickup_hour, day_of_week
-        ORDER BY pickup_Hour, day_of_week;
-        ''').fetchdf()
+        result = load_g5_data(filtered_df)
 
         print(result)
 
@@ -349,7 +382,6 @@ with t3:# ======================= Graphs Tab =======================
                 "As the majority of trips are concentrated around the 0 to 5 mile range, it appears that the service is very rarely used for long trips. Considering the first graph that shows the areas with the highest trips, it would seem that most the revenue is generated from trips in and around the Midtown Center."
             )
 
-
         with st.container(border = True):
             st.markdown(
                 "### Breakdown of Payment Types"
@@ -361,7 +393,6 @@ with t3:# ======================= Graphs Tab =======================
             st.markdown(
                 "As the vast majority of payments are done with method 1, it's availability is vital. Fare payments rely so much on this type of payment that one may conclude that revenue is dependent on the availability of this type."
             )
-
 
         with st.container(border = True):
             st.markdown(
