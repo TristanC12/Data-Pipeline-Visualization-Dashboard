@@ -1,0 +1,12 @@
+polars
+duckdb
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+streamlit
+altair
+pyarrow
+scikit-learn
+joblib
