@@ -51,6 +51,7 @@ pyarrow==23.0.1
 pydeck==0.9.1
 Pygments==2.19.2
 pyparsing==3.3.2
+python==3.14.3
 python-dateutil==2.9.0.post0
 pytz==2025.2
 pyzmq==27.1.0
